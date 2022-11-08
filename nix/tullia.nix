@@ -19,7 +19,7 @@ in rec {
         .#hydraJobs.{plan-nix,roots}.${system}
     '';
 
-    memory = 1024 * 8;
+    memory = 1024 * 10;
     nomad.resources.cpu = 10000;
   };
 
