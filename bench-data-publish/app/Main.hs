@@ -1,29 +1,27 @@
-{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE RecordWildCards #-}
 
 
 module Main where
 
 import           Control.Exception
 import           Control.Monad
-import           Control.Monad.Trans.Except                (runExceptT)
-import           Data.Bool                                 (bool)
-import           Data.ByteString.Char8                     as BS (empty, pack,
-                                                                  readFile)
+import           Control.Monad.Trans.Except (runExceptT)
+import           Data.Bool (bool)
+import           Data.ByteString.Char8 as BS (empty, pack, readFile)
+import           Data.Text (Text)
 
 import           System.Directory
-import           System.Directory.Extra                    (listDirectories)
-import           System.Environment                        (lookupEnv)
+import           System.Directory.Extra (listDirectories)
+import           System.Environment (lookupEnv)
 import           System.FilePath
-import           System.Posix.User                         (getLoginName)
+import           System.Posix.User (getLoginName)
 import           Text.Printf
 
 import           Data.Aeson
-import           Hasql.Connection                          as DB (Connection,
-                                                                  Settings,
-                                                                  settings)
-import qualified Hasql.Session                             as DB
+import           Hasql.Connection as DB (Connection, Settings, settings)
+import qualified Hasql.Session as DB
 
 import           Cardano.Benchmarking.Publish.DBConnection
 import           Cardano.Benchmarking.Publish.DBQueries
