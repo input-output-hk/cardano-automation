@@ -31,7 +31,7 @@
         flake = pkgs.hixProject.flake {};
       in flake // {
         legacyPackages = pkgs;
-      } // tullia.fromSimple system (import ./tullia.nix self system));
+      } // tullia.fromSimple system (import nix/tullia.nix system));
 
   # --- Flake Local Nix Configuration ----------------------------
   nixConfig = {
