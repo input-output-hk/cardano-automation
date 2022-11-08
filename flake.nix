@@ -3,7 +3,11 @@
   inputs.haskellNix.url = "github:input-output-hk/haskell.nix";
   inputs.nixpkgs.follows = "haskellNix/nixpkgs-unstable";
   inputs.flake-utils.url = "github:numtide/flake-utils";
-  outputs = { self, nixpkgs, flake-utils, haskellNix }:
+  inputs.tullia = {
+    url = "github:input-output-hk/tullia";
+    inputs.nixpkgs.follows = "nixpkgs";
+  };
+  outputs = { self, nixpkgs, flake-utils, haskellNix, tullia }:
     let
       supportedSystems = [
         "x86_64-linux"
@@ -19,7 +23,7 @@
             hixProject =
               final.haskell-nix.hix.project {
                 src = ./.;
-                evalSystem = "x86_64-linux";
+                evalSystem = "x86_64-darwin";
               };
           })
         ];
@@ -27,7 +31,7 @@
         flake = pkgs.hixProject.flake {};
       in flake // {
         legacyPackages = pkgs;
-      });
+      } // tullia.fromSimple system (import ./tullia.nix self system));
 
   # --- Flake Local Nix Configuration ----------------------------
   nixConfig = {
