@@ -7,7 +7,7 @@ module Main where
 
 import           Control.Exception
 import           Control.Monad
-import           Control.Monad.Trans.Except (runExceptT)
+import           Control.Monad.Trans.Except.Extra (handleIOExceptT, runExceptT)
 import           Data.Bool (bool)
 import           Data.ByteString.Char8 as BS (empty, pack, readFile)
 import           Data.Text (Text)
@@ -43,24 +43,23 @@ eval :: Config -> DB.Settings -> IO ()
 eval Config{..} dbSettings
   = case appCommand of
 
-    Bootstrap anonRole_
+    Bootstrap tableSqlFile
       | not appForce -> putStrLn "'bootstrap' requires -f (force); it is a destructive operation"
       | otherwise -> withDB dbSettings $ \conn -> do
           result <- runExceptT $ do
-              bootstrap dbSchema conn
-              updateViews dbSchema (BS.pack anonRole_) conn
+              tableSql <- SqlSource <$> liftReadFile tableSqlFile
+              bootstrap tableSql dbSchema conn
           case result of
             Left err -> errorMsg err
-            Right views -> putStrLn $
-              "successfully bootstrapped schema: '" ++ appDBSchema ++ "'\n\
-              \views exposed to API (role '" ++ anonRole_ ++ "'): " ++ show views
+            Right{}  -> putStrLn $ "successfully bootstrapped schema: '" ++ appDBSchema ++ "'"
 
-    UpdateViews anonRole_ ->
+    UpdateViews viewSqlFile anonRole_ ->
       withDB dbSettings $ \conn -> do
-        result <- runExceptT $
-          updateViews dbSchema (BS.pack anonRole_) conn
+        result <- runExceptT $ do
+          viewSql <- SqlSource <$> liftReadFile viewSqlFile
+          updateViews viewSql dbSchema (BS.pack anonRole_) conn
         case result of
-          Left err -> errorMsg err
+          Left err    -> errorMsg err
           Right views -> putStrLn $
             "views exposed to API (role '" ++ anonRole_ ++ "'): " ++ show views ++
             "\nNB. if any view has been *renamed*, please drop the old one manually from the DB!"
@@ -98,6 +97,7 @@ eval Config{..} dbSettings
     dbSchema      = DBSchema (BS.pack appDBSchema)
     isPublished p = bool '-' '+' p : "published"
     errorMsg msg  = putStrLn $ "ERROR: (" ++ show appCommand ++ ") -- " ++ msg
+    liftReadFile  = handleIOExceptT show . BS.readFile
 
 storeRunsToDB :: DBSchema -> DB.Connection -> [FilePath] -> IO ()
 storeRunsToDB dbSchema conn metaFiles

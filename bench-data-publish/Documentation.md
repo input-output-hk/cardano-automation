@@ -5,9 +5,9 @@
 
 The command-line tool `bench-data-publish` is a utility for publishing the result of benchmarking run analysis to a Postgres DB.
 
-It also contains the DB schema, as well as a definition of views on the data stored within.
+It relies on separate SQL definitions of 1) a DB schema (i.e. tables for data) and 2) DB views on the data stored within.
 
-1. The schema is designed to only rely on an absolute minimum of data normalization; the `.json`s from a run and its analysis are stored verbatim the schema tables.
+1. The schema is designed to only utilize an absolute minimum of data normalization; the `.json`s from a run and its analysis are stored verbatim the schema tables.
 2. The views extract all relevant properties and metrics from those objects and expose them to make the data searchable and filterable.
 
 By using a service like PostgREST, a REST API can be served immediately from these views, without an addtional layer of configuration.
