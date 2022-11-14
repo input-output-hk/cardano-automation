@@ -6,30 +6,26 @@ module  Cardano.Benchmarking.Publish.DBSchema
         ) where
 
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Except         (ExceptT)
+import           Control.Monad.Trans.Except (ExceptT)
 import           Control.Monad.Trans.Except.Extra
-import           Data.ByteString.Char8              as BS (ByteString, null,
-                                                           readFile, unpack)
-import           Data.Functor.Contravariant         as Contra ((>$<))
-import           Data.List                          (sort)
-import           Data.Text                          as T (Text, intercalate,
-                                                          snoc)
-import           Data.Text.Encoding                 as T (decodeLatin1,
-                                                          encodeUtf8)
+import           Data.ByteString.Char8 as BS (ByteString, null, unpack)
+import           Data.Functor.Contravariant as Contra ((>$<))
+import           Data.List (sort)
+import           Data.Text as T (Text, intercalate, snoc)
+import           Data.Text.Encoding as T (decodeLatin1, encodeUtf8)
 import           Data.Tuple.Extra
 
-import           Hasql.Connection                   as DB
-import           Hasql.Decoders                     as Dec hiding (timestamp)
-import           Hasql.Encoders                     as Enc hiding (timestamp)
-import           Hasql.Session                      as DB
-import           Hasql.Statement                    as DB (Statement (Statement))
+import           Hasql.Connection as DB
+import           Hasql.Decoders as Dec hiding (timestamp)
+import           Hasql.Encoders as Enc hiding (timestamp)
+import           Hasql.Session as DB
+import           Hasql.Statement as DB (Statement (Statement))
 
 import           Cardano.Benchmarking.Publish.Types
 
-import           Paths_bench_data_publish
 
-
-newtype DBSchema = DBSchema BS.ByteString
+newtype DBSchema  = DBSchema BS.ByteString
+newtype SqlSource = SqlSource BS.ByteString
 
 instance Show DBSchema where
   show (DBSchema s) = BS.unpack s
@@ -48,16 +44,13 @@ setSearchPath (DBSchema schemaName)
 -- bootstraps schema with empty tables onto a DB
 -- TODO: installs trigger for schema refresh
 -- is destructive: drops a possible pre-existing schema with all data
-bootstrap :: DBSchema -> Connection -> ExceptT String IO ()
-bootstrap schema@(DBSchema schemaName) conn
-  = do
-      tableSql <- handleIOExceptT show $
-        BS.readFile =<< getDataFileName "db/bench-data-tables.sql"
-      let
-        script :: DB.Session ()
-        script = DB.sql $ preamble <> setSearchPath schema <> tableSql
+bootstrap :: SqlSource -> DBSchema -> Connection -> ExceptT String IO ()
+bootstrap (SqlSource tableSql) schema@(DBSchema schemaName) conn
+  = let
+      script :: DB.Session ()
+      script = DB.sql $ preamble <> setSearchPath schema <> tableSql
 
-      liftDBRun script conn
+    in liftDBRun script conn
   where
     preamble :: ByteString
     preamble =
@@ -68,11 +61,9 @@ bootstrap schema@(DBSchema schemaName) conn
 -- updates API-facing views on the DB without touching any tables or stored data
 -- and grants read access of all views defined to the specified role
 -- is non-destructive
-updateViews :: DBSchema -> ByteString -> Connection -> ExceptT String IO [Text]
-updateViews schema@(DBSchema schemaName) anonRole conn
+updateViews :: SqlSource -> DBSchema -> ByteString -> Connection -> ExceptT String IO [Text]
+updateViews (SqlSource viewSql) schema@(DBSchema schemaName) anonRole conn
   = do
-      viewSql <- handleIOExceptT show $
-        BS.readFile =<< getDataFileName "db/bench-data-views.sql"
       let
         script :: DB.Session ()
         script = DB.sql $ setSearchPath schema <> viewSql

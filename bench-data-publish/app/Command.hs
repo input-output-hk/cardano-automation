@@ -17,8 +17,8 @@ data Command
   | Import FilePath
   | ImportAll FilePath
   | List
-  | Bootstrap String
-  | UpdateViews String
+  | Bootstrap FilePath
+  | UpdateViews FilePath String
   deriving Show
 
 data DBCredentials
@@ -79,10 +79,13 @@ parseConfig
           (Publish False <$> parseRunDirArg)
           "Unpublish specified run from API"
       , cmdParser "bootstrap"
-          (Bootstrap <$> strArgument (metavar "ROLE" <> help "Anonymous/read-only role on the DB"))
+          (Bootstrap <$> parseFileArg ".sql file containing table definitions")
           "Bootstrap schema onto DB, CLEARING PREVIOUS SCHEMA"
       , cmdParser "update-views"
-          (UpdateViews <$> strArgument (metavar "ROLE" <> help "Anonymous/read-only role on the DB"))
+          (UpdateViews
+            <$> parseFileArg ".sql file containing view definitions"
+            <*> strArgument (metavar "ROLE" <> help "Anonymous/read-only role on the DB")
+          )
           "Update API facing views in the schema only, not touching any tables or stored data"
       ]
     cmdParser cmd parser description = command cmd $ info parser $ progDesc description
@@ -124,5 +127,13 @@ parseRunDirArg
   = strArgument
     ( metavar "FILE|PATH"
     <> help "Path of a benchmarking run or its meta.json"
+    <> completer (bashCompleter "file")
+    )
+
+parseFileArg :: String -> Parser FilePath
+parseFileArg helpText
+  = strArgument
+    ( metavar "FILE"
+    <> help helpText
     <> completer (bashCompleter "file")
     )

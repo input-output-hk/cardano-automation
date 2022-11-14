@@ -10,9 +10,6 @@ build-type:         Simple
 
 extra-doc-files:    Documentation.md
 
-data-files:         db/bench-data-tables.sql
-                    db/bench-data-views.sql
-
 
 executable bench-data-publish
     main-is:            Main.hs
@@ -22,9 +19,6 @@ executable bench-data-publish
                         Cardano.Benchmarking.Publish.DBSchema
                         Cardano.Benchmarking.Publish.Types
                         Command
-                        Paths_bench_data_publish
-
-    autogen-modules:    Paths_bench_data_publish
 
     if os(windows)
       buildable: False
