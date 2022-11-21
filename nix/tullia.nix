@@ -1,23 +1,28 @@
-system: let
+systems: let
   ciInputName = "GitHub event";
+  repository = "input-output-hk/cardano-automation";
 in rec {
   tasks.ci = {config, lib, ...}: {
     preset = {
       nix.enable = true;
 
-      github-ci = {
+      github.ci = {
         enable = config.actionRun.facts != {};
-        repo = "input-output-hk/cardano-automation";
-        sha = config.preset.github-ci.lib.readRevision ciInputName null;
+        inherit repository;
+        revision = config.preset.github.lib.readRevision ciInputName null;
       };
     };
 
-    command.text = ''
-      nix build -L \
-        .#hydraJobs.packages.bench-data-publish:exe:bench-data-publish.${system} \
-        .#hydraJobs.devShells.default.${system} \
-        .#hydraJobs.{plan-nix,roots}.${system}
-    '';
+    command.text = config.preset.github.status.lib.reportBulk {
+      bulk.text = "echo ${lib.escapeShellArg (builtins.toJSON systems)} | nix-systems -i";
+      each.text = ''
+        nix build -L \
+          .#hydraJobs.packages.bench-data-publish:exe:bench-data-publish."$1" \
+          .#hydraJobs.devShells.default."$1" \
+          .#hydraJobs.{plan-nix,roots}."$1"
+      '';
+      skippedDescription = lib.escapeShellArg "No nix builder available for this system";
+    };
 
     memory = 1024 * 10;
     nomad.resources.cpu = 10000;
@@ -28,7 +33,7 @@ in rec {
     io = ''
       let github = {
         #input: "${ciInputName}"
-        #repo: "input-output-hk/cardano-automation"
+        #repo: "${repository}"
       }
       
       #lib.merge
