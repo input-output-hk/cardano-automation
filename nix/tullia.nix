@@ -14,7 +14,11 @@ in rec {
     };
 
     command.text = config.preset.github.status.lib.reportBulk {
-      bulk.text = "echo ${lib.escapeShellArg (builtins.toJSON systems)} | nix-systems -i";
+      bulk.text = ''
+        echo ${lib.escapeShellArg (builtins.toJSON systems)} |
+        nix-systems -i |
+        jq 'with_entries(select(.value))' # filter out systems that we cannot build for
+      '';
       each.text = ''
         nix build -L \
           .#hydraJobs.packages.bench-data-publish:exe:bench-data-publish."$1" \
