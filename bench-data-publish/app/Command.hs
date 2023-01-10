@@ -1,7 +1,10 @@
+{-# LANGUAGE DeriveGeneric #-}
+
 {-# OPTIONS_GHC -fno-warn-partial-fields #-}
 
 module Command
-        ( Command (..)
+        ( CLICommand (..)
+        , Command (..)
         , Config(..)
         , DBCredentials(..)
         , envVarDBPass
@@ -9,16 +12,31 @@ module Command
         , parseCommandLine
         ) where
 
+import           Data.Aeson
+import           GHC.Generics (Generic)
 import           Options.Applicative as Opt
 
 
 data Command
-  = Publish Bool FilePath
-  | Import FilePath
-  | ImportAll FilePath
+  = Publish
+  | Bootstrap
   | List
-  | Bootstrap FilePath
-  | UpdateViews FilePath String
+  | UpdateViews
+  | Import
+  | ImportAll
+  deriving (Show, Generic)
+
+instance FromJSON Command where
+  parseJSON = genericParseJSON defaultOptions {sumEncoding = ObjectWithSingleField}
+
+data CLICommand
+  = CLIPublish Bool FilePath
+  | CLIImport FilePath
+  | CLIImportAll FilePath
+  | CLIList
+  | CLIBootstrap FilePath
+  | CLIUpdateViews FilePath String
+  | CLIViaStdin
   deriving Show
 
 data DBCredentials
@@ -35,16 +53,16 @@ data DBCredentials
 
 data Config
   = Config {
-        appCommand  :: Command
+        appCommand  :: CLICommand
       , appDB       :: DBCredentials
-      , appDBSchema :: String
+      , appDBSchema :: Maybe String
       , appForce    :: Bool
       }
   deriving Show
 
 envVarDBPass, envVarDBURI :: String
 envVarDBPass    = "BENCH_DATA_PASS"
-envVarDBURI     = "BECNH_DATA_PGURI"
+envVarDBURI     = "BENCH_DATA_PGURI"
 
 
 parseCommandLine :: IO Config
@@ -56,37 +74,44 @@ parseCommandLine =
 
 parseConfig :: Parser Config
 parseConfig
-  = Config
-      <$> parseCommand
-      <*> parseDBCredentials
-      <*> parseDBSchema
-      <*> parseForce
+  = parseViaStdin
+    <|>
+    ( Config
+    <$> parseCommand
+    <*> parseDBCredentials
+    <*> optional parseDBSchema
+    <*> parseForce
+    )
   where
+    parseViaStdin = subparser $
+        cmdParser "via-stdin"
+          (pure $ Config CLIViaStdin NoCreds Nothing False)
+          "Expect command and payload as JSON via stdin"
     parseCommand = subparser $ mconcat
       [ cmdParser "import"
-          (Import <$> parseRunDirArg)
+          (CLIImport <$> parseRunDirArg)
           "Import/update specified run"
       , cmdParser "import-all"
-          (ImportAll <$> strArgument (metavar "PATH" <> help "Path containing benchmarking runs" <> completer (bashCompleter "directory")))
+          (CLIImportAll <$> strArgument (metavar "PATH" <> help "Path containing benchmarking runs" <> completer (bashCompleter "directory")))
           "Import/update all runs contained in directory"
       , cmdParser "list"
-          (pure List)
+          (pure CLIList)
           "List all runs"
       , cmdParser "publish"
-          (Publish True <$> parseRunDirArg)
+          (CLIPublish True <$> parseRunDirArg)
           "Publish specified run to API"
       , cmdParser "unpublish"
-          (Publish False <$> parseRunDirArg)
+          (CLIPublish False <$> parseRunDirArg)
           "Unpublish specified run from API"
       , cmdParser "bootstrap"
-          (Bootstrap <$> parseFileArg ".sql file containing table definitions")
+          (CLIBootstrap <$> parseFileArg ".sql file containing table definitions")
           "Bootstrap schema onto DB, CLEARING PREVIOUS SCHEMA"
       , cmdParser "update-views"
-          (UpdateViews
+          (CLIUpdateViews
             <$> parseFileArg ".sql file containing view definitions"
             <*> strArgument (metavar "ROLE" <> help "Anonymous/read-only role on the DB")
           )
-          "Update API facing views in the schema only, not touching any tables or stored data"
+          "Only update API facing views for role in the schema, not touching any tables or stored data"
       ]
     cmdParser cmd parser description = command cmd $ info parser $ progDesc description
 
@@ -115,7 +140,10 @@ parseCredAttribute c h
 parseDBSchema :: Parser String
 parseDBSchema
   = strOption
-    (short 's' <> long "schema" <> metavar "SCHEMA" <> help "DB schema to use")
+    ( short 's'
+    <> metavar "SCHEMA"
+    <> help "DB schema to use (default: public)"
+    )
 
 parseForce :: Parser Bool
 parseForce

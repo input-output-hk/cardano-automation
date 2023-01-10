@@ -19,6 +19,7 @@ executable bench-data-publish
                         Cardano.Benchmarking.Publish.DBSchema
                         Cardano.Benchmarking.Publish.Types
                         Command
+                        JSONWrapper
 
     if os(windows)
       buildable: False
