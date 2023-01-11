@@ -20,7 +20,8 @@ import           GHC.Generics (Generic)
 import           Prelude hiding (error)
 
 import           Data.Aeson as Aeson
-import           Data.ByteString.Char8 (ByteString, toStrict)
+import           Data.ByteString.Char8 (ByteString)
+import           Data.ByteString.Lazy.Char8 (toStrict)
 import           Data.Text as T (Text, pack, unpack)
 
 import           Command (Command)
