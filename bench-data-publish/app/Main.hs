@@ -1,33 +1,38 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 
 module Main where
 
 import           Control.Exception
 import           Control.Monad
-import           Control.Monad.Trans.Except.Extra (handleIOExceptT, runExceptT)
+import           Control.Monad.IO.Class (liftIO)
+import           Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
+import           Control.Monad.Trans.Except.Extra (hoistEither)
 import           Data.Bool (bool)
-import           Data.ByteString.Char8 as BS (empty, pack, readFile)
-import           Data.Text (Text)
+import           Data.ByteString.Char8 as BS (ByteString, empty, pack, readFile)
+import           Data.ByteString.Lazy.Char8 as BSL (getContents, putStr)
+import           Data.Maybe (fromJust)
 
 import           System.Directory
 import           System.Directory.Extra (listDirectories)
 import           System.Environment (lookupEnv)
+import           System.Exit
 import           System.FilePath
 import           System.Posix.User (getLoginName)
 import           Text.Printf
 
-import           Data.Aeson
+import           Data.Aeson as Aeson
 import           Hasql.Connection as DB (Connection, Settings, settings)
-import qualified Hasql.Session as DB
 
 import           Cardano.Benchmarking.Publish.DBConnection
 import           Cardano.Benchmarking.Publish.DBQueries
 import           Cardano.Benchmarking.Publish.DBSchema
 import           Cardano.Benchmarking.Publish.Types
 import           Command
+import           JSONWrapper
 
 
 main :: IO ()
@@ -35,90 +40,147 @@ main
   = do
     conf <- parseCommandLine
     dbSettings <- getDBSettings (appDB conf)
-    eval conf dbSettings
+    result <- evalCatching conf dbSettings
+    case appCommand conf of
+      CLIViaStdin -> BSL.putStr $ encode result
+      _ ->
+        let (msg, code) = resultAsPlain result
+        in putStrLn msg >> if code == 0 then exitSuccess else exitWith (ExitFailure code)
 
-{-# ANN eval ("HLint: ignore Use >=>" :: Text) #-}
-
-eval :: Config -> DB.Settings -> IO ()
-eval Config{..} dbSettings
+toJSONWrapper :: Config -> IO JSONWrapper
+toJSONWrapper Config{..}
   = case appCommand of
+    CLIViaStdin ->
+      BSL.getContents >>= either Prelude.error pure . eitherDecode
+    CLIList ->
+      wrap List ()
+    CLIBootstrap tableSqlFile -> do
+      sql <- Prelude.readFile tableSqlFile
+      wrap Bootstrap (appForce, sql)
+    CLIUpdateViews viewsSqlFile anonRole -> do
+      sql <- Prelude.readFile viewsSqlFile
+      wrap UpdateViews (anonRole, sql)
+    CLIPublish publish target -> do
+      eMeta :: Either String Aeson.Value <-
+        eitherDecodeFileStrict (normalizeMetaFilePath target)
+      case eMeta of
+        Left err    -> Prelude.error err
+        Right meta  -> wrap Publish (publish, meta)
+    CLIImport target -> do
+      eRun :: Either String (ClusterRun AsValue) <-
+        loadClusterRun target
+      case eRun of
+        Left err  -> Prelude.error err
+        Right run -> wrap Import run
+    CLIImportAll targetDir ->
+      wrap ImportAll targetDir
+  where
+    wrap :: ToJSON a => Command -> a -> IO JSONWrapper
+    wrap cmd
+      = pure . JSONWrapper cmd appDBSchema . Just . toJSON
 
-    Bootstrap tableSqlFile
-      | not appForce -> putStrLn "'bootstrap' requires -f (force); it is a destructive operation"
-      | otherwise -> withDB dbSettings $ \conn -> do
-          result <- runExceptT $ do
-              tableSql <- SqlSource <$> liftReadFile tableSqlFile
-              bootstrap tableSql dbSchema conn
-          case result of
-            Left err -> errorMsg err
-            Right{}  -> putStrLn $ "successfully bootstrapped schema: '" ++ appDBSchema ++ "'"
+evalCatching :: Config -> DB.Settings -> IO JSONResult
+evalCatching conf db
+  = do
+    res <- try $
+      eval db =<< toJSONWrapper conf
+    pure $ case res of
+      Left (SomeException e)  -> resultError (show e)
+      Right ok                -> ok
 
-    UpdateViews viewSqlFile anonRole_ ->
-      withDB dbSettings $ \conn -> do
-        result <- runExceptT $ do
-          viewSql <- SqlSource <$> liftReadFile viewSqlFile
-          updateViews viewSql dbSchema (BS.pack anonRole_) conn
-        case result of
-          Left err    -> errorMsg err
-          Right views -> putStrLn $
-            "views exposed to API (role '" ++ anonRole_ ++ "'): " ++ show views ++
+eval :: DB.Settings -> JSONWrapper -> IO JSONResult
+eval dbSettings JSONWrapper{..}
+  = either errorResult id
+    <$> withDB dbSettings (runExceptT . go)
+  where
+    dbSchema        = DBSchema $ maybe "public" BS.pack schema
+    errorResult msg = resultError $ "ERROR: (" ++ show command ++ ") -- " ++ msg
+
+    liftUnwrapPayload Nothing
+      = throwE "no payload defined"
+    liftUnwrapPayload (Just p)
+      = case fromJSON p of
+        Error e -> throwE e
+        Success v -> pure v
+
+    go :: Connection -> ExceptT String IO JSONResult
+    go conn
+      = case command of
+
+        Bootstrap -> do
+          (force, tableSql) <- liftUnwrapPayload payload
+          if not force
+          then throwE "requires -f (force); it is a destructive operation"
+          else do
+            bootstrap tableSql dbSchema conn
+            pure $ resultSuccess $
+              "successfully bootstrapped schema: '" ++ show dbSchema ++ "'"
+
+        UpdateViews -> do
+          (anonRole, viewSql) <- liftUnwrapPayload payload
+          views <- updateViews viewSql dbSchema (BS.pack anonRole) conn
+          pure $ resultSuccess $
+            "views exposed to API (role '" ++ anonRole ++ "'): " ++ show views ++
             "\nNB. if any view has been *renamed*, please drop the old one manually from the DB!"
 
-    ImportAll targetDir -> do
-      runMetas <- searchRuns targetDir
-      putStrLn $ "found runs: " ++ show (length runMetas)
-      unless (null runMetas) $
-        withDB dbSettings $ \conn ->
-          storeRunsToDB dbSchema conn runMetas
+        Import -> do
+          run <- liftUnwrapPayload payload
+          storeRunsToDB dbSchema conn $ Right run
+          pure $ resultSuccess Aeson.Null
 
-    Import targetFile ->
-      withDB dbSettings $ \conn ->
-        storeRunsToDB dbSchema conn [targetFile]
+        ImportAll -> do
+          targetDir <- liftUnwrapPayload payload
+          runMetas <- liftIO $ searchRuns targetDir
+          unless (null runMetas) $
+            storeRunsToDB dbSchema conn (Left runMetas)
+          pure $ resultSuccess $
+            length runMetas
 
-    List ->
-      withDB dbSettings $ \conn ->
-        dbGetRuns dbSchema `DB.run` conn >>= \case
-          Left err -> errorMsg $ show err
-          Right runs -> do
-            forM_ runs $ \(ix, meta, publ) ->
-              printf "%3i %s -- %s\n" ix (isPublished publ) (show meta)
-            printf "----\n%i runs\n" (length runs)
+        List -> do
+          runs <- liftDBRun (dbGetRuns dbSchema) conn
+          let
+            isPublished p = bool '-' '+' p : "published"
 
-    Publish publish target ->
-      loadMetaStub target >>= \case
-        Left err -> errorMsg err
-        Right meta -> withDB dbSettings $ \conn -> do
-          putStr $ bool "un-" "" publish ++ "publishing: " ++ target ++ " -- "
-          dbPublishRun dbSchema meta publish `DB.run` conn >>= \case
-            Left e      -> errorMsg $ show e
-            Right found -> putStrLn $ bool "(run not in DB)" "DONE" found
+            msg :: [String]
+            msg =  [printf "%3i %s -- %s" ix (isPublished publ) (show meta) | (ix, meta, publ) <- runs]
+                ++ [printf "---- %i runs" (length runs)]
 
-  where
-    dbSchema      = DBSchema (BS.pack appDBSchema)
-    isPublished p = bool '-' '+' p : "published"
-    errorMsg msg  = putStrLn $ "ERROR: (" ++ show appCommand ++ ") -- " ++ msg
-    liftReadFile  = handleIOExceptT show . BS.readFile
+          pure $ resultSuccess msg
 
-storeRunsToDB :: DBSchema -> DB.Connection -> [FilePath] -> IO ()
-storeRunsToDB dbSchema conn metaFiles
+        Publish -> do
+          (publish, meta) <- liftUnwrapPayload payload
+          found <- liftDBRun (dbPublishRun dbSchema meta publish) conn
+          pure $ resultSuccess $
+            if found
+            then bool "un-" "" publish ++ "published: " ++ show meta
+            else "run not in DB"
+
+storeRunsToDB :: DBSchema -> DB.Connection -> Either [FilePath] (ClusterRun AsValue) -> ExceptT String IO ()
+storeRunsToDB dbSchema conn runs
   = do
-    anyCreated <- foldM storeClusterRun False metaFiles
+    anyCreated <- foldM go False (either (map Left) (\r -> [Right r]) runs)
 
     -- for any change to the run list itself (not the associated results)
     -- we need to refresh the materialized view
     when anyCreated $
-      void $ dbRefreshView dbSchema `DB.run` conn
+      void $ liftDBRun (dbRefreshView dbSchema) conn
   where
-    errorMsg result msg = putStrLn ("ERROR: " ++ msg) >> pure result
-    storeClusterRun created metaFile
+    getClusterRun :: Either FilePath (ClusterRun AsValue) -> ExceptT String IO (ClusterRun ByteString)
+    getClusterRun (Left metaFile) = liftIO (loadClusterRun metaFile) >>= hoistEither >>= getClusterRun . Right
+    getClusterRun (Right cr)      = pure $ valueToBS `fmap` cr
+
+    logClusterRun created (Left metaFile)
+      = liftIO $  putStrLn $ bool "update" "create" created ++ ": " ++ metaFile
+    logClusterRun _ _
+      = pure ()
+
+    go :: Bool -> Either FilePath (ClusterRun AsValue) -> ExceptT String IO Bool
+    go !created run_
       = do
-        putStr $ "storing: " ++ metaFile ++ " -- "
-        loadClusterRun metaFile >>= \case
-          Left err -> errorMsg created err
-          Right run -> dbStoreRun dbSchema run `DB.run` conn
-            >>= either
-              (errorMsg created . show)
-              (\created' -> putStrLn (bool "UPDATED" "CREATED" created') >> pure (created || created'))
+        run <- getClusterRun run_
+        created' <- liftDBRun (dbStoreRun dbSchema run) conn
+        logClusterRun created' run_
+        pure $ created' || created
 
 searchRuns :: FilePath -> IO [FilePath]
 searchRuns targetDir
@@ -131,18 +193,15 @@ normalizeMetaFilePath metaFile
   | takeFileName metaFile == "meta.json" = metaFile
   | otherwise = metaFile </> "meta.json"
 
-loadMetaStub :: FilePath -> IO (Either String MetaStub)
-loadMetaStub
-  = eitherDecodeFileStrict' . normalizeMetaFilePath
-
 -- given a path to its directory or meta.json, loads all pertaining data into a ClusterRun
-loadClusterRun :: FilePath -> IO (Either String ClusterRun)
+loadClusterRun :: FilePath -> IO (Either String (ClusterRun AsValue))
 loadClusterRun metaFile_
   = do
-    runMeta <- BS.readFile metaFile
-    case eitherDecodeStrict' runMeta of
+    runMeta_ <- BS.readFile metaFile
+    case eitherDecodeStrict' runMeta_ of
         Left e -> pure $ Left e
         Right metaStub -> do
+          let runMeta = fromJust $ decodeStrict runMeta_
           runBlockProp <- tryReadFile $ analysis </> "blockprop.json"
           runClusterPerf <- tryReadFile $ analysis </> "clusterperf.json"
           pure $! Right $! ClusterRun{..}
@@ -152,7 +211,7 @@ loadClusterRun metaFile_
     metaFile = normalizeMetaFilePath metaFile_
     analysis = takeDirectory metaFile </> "analysis"
     tryReadFile f
-      = doesFileExist f >>= bool (pure Nothing) (Just <$> BS.readFile f)
+      = doesFileExist f >>= bool (pure Nothing) (decodeFileStrict f)
 
 getDBSettings :: DBCredentials -> IO DB.Settings
 getDBSettings NoCreds

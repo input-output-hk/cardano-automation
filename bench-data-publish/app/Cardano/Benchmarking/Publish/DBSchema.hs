@@ -8,6 +8,7 @@ module  Cardano.Benchmarking.Publish.DBSchema
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Except (ExceptT)
 import           Control.Monad.Trans.Except.Extra
+import           Data.Aeson
 import           Data.ByteString.Char8 as BS (ByteString, null, unpack)
 import           Data.Functor.Contravariant as Contra ((>$<))
 import           Data.List (sort)
@@ -30,6 +31,14 @@ newtype SqlSource = SqlSource BS.ByteString
 instance Show DBSchema where
   show (DBSchema s) = BS.unpack s
 
+instance FromJSON DBSchema where
+  parseJSON v
+    = DBSchema . encodeUtf8 <$> parseJSON v
+
+instance FromJSON SqlSource where
+  parseJSON v
+    = SqlSource . encodeUtf8 <$> parseJSON v
+
 
 liftDBRun :: MonadIO m => DB.Session a -> Connection -> ExceptT String m a
 liftDBRun session conn
@@ -42,7 +51,6 @@ setSearchPath (DBSchema schemaName)
   = "SET search_path TO " <> schemaName <> ";\n"
 
 -- bootstraps schema with empty tables onto a DB
--- TODO: installs trigger for schema refresh
 -- is destructive: drops a possible pre-existing schema with all data
 bootstrap :: SqlSource -> DBSchema -> Connection -> ExceptT String IO ()
 bootstrap (SqlSource tableSql) schema@(DBSchema schemaName) conn
@@ -105,7 +113,7 @@ postgrestNotify
 encClusterRun :: Params MetaStub
 encClusterRun
   =  (profile   >$< param (Enc.nonNullable Enc.text))
-  <> (batch     >$< param (Enc.nonNullable Enc.text))
+  <> (commit    >$< param (Enc.nonNullable Enc.text))
   <> (timestamp >$< param (Enc.nonNullable Enc.timestamptz))
 
 -- encoder for table 'run_info'

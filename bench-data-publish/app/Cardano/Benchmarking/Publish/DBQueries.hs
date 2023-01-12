@@ -76,7 +76,7 @@ setResult schema
 
 
 -- returns whether the run has been created (True) or updated (False)
-dbStoreRun :: DBSchema -> ClusterRun -> DB.Session Bool
+dbStoreRun :: DBSchema -> ClusterRun ByteString -> DB.Session Bool
 dbStoreRun (DBSchema schemaName) ClusterRun{..}
   = do
     (runId, created) <-
