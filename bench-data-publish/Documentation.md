@@ -16,8 +16,8 @@ By using a service like PostgREST, a REST API can be served immediately from the
 ## Usage 
 
 ```
-Usage: bench-data-publish (COMMAND | COMMAND 
-                            [--pg-uri URI | --db ARG [-u ARG] [-p ARG] [-h ARG] 
+Usage: bench-data-publish (CMD1 | CMD2
+                            [--pg-uri URI | --db ARG [-u ARG] [-p ARG] [-h ARG]
                               [-P ARG]] [-s SCHEMA] [-f])
 
 Available options:
@@ -30,8 +30,11 @@ Available options:
   -s SCHEMA                DB schema to use (default: public)
   -f                       Force destructive operations (e.g. bootstrap)
 
-Available commands:
+CMD1 (without DB credentials):
   via-stdin                Expect command and payload as JSON via stdin
+  get-builtin              Output a built-in .sql query
+
+CMD2 (with DB credentials):
   import                   Import/update specified run
   import-all               Import/update all runs contained in directory
   list                     List all runs
@@ -43,12 +46,15 @@ Available commands:
 
 ### DB resource
 
-1. The specification of a DB resource is mandatory, either as a Postgres URI or via individual values.
+1. The specification of a DB resource is mandatory for most commands, either as a Postgres URI or via individual values.
    * The DB user should be owner of the DB specified; it needs privileges to `CREATE`, `DROP` and `GRANT`.
 2. The specification of a DB schema is optional, defaulting to `public`.
    * All DB objects that `bench-data-publish` touches reside in that schema only.
 3. For the `update-views` commmand, an unprivileged / anonymous DB role is expected.
    * This role is intended for any API-side read-only queries; for this role, `CREATE ROLE <anon_role> NOLOGIN;` is sufficient.
+4. The `bootstrap` and  `update-views` commands use built-in `.sql` scripts as found in folder `db/`.
+   * These built-ins can be overridden by a `.sql` file on the CLI; wrapped in JSON the full, explicit SQL script is always mandatory.
+   * The built-ins can be dumped by their file name for testing / development purposes via command `get-builtin`.
 
 ### API via PostgREST
 
