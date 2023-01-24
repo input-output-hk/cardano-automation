@@ -6,11 +6,35 @@
 module  Cardano.Benchmarking.Publish.Types where
 
 import           Control.Applicative ((<|>))
+import           Data.ByteString.Char8 as BS (ByteString, unpack)
 import           Data.Text as T (Text, take, unpack)
+import           Data.Text.Encoding as T (decodeLatin1, encodeUtf8)
 import           Data.Time.Clock (UTCTime)
 import           Data.Time.Clock.System
 
 import           Data.Aeson as Aeson
+
+
+newtype DBSchema  = DBSchema BS.ByteString
+newtype SqlSource = SqlSource BS.ByteString
+
+instance Show DBSchema where
+  show (DBSchema s) = BS.unpack s
+
+instance FromJSON DBSchema where
+  parseJSON v
+    = DBSchema . encodeUtf8 <$> parseJSON v
+
+instance Show SqlSource where
+  show (SqlSource s) = BS.unpack s
+
+instance FromJSON SqlSource where
+  parseJSON v
+    = SqlSource . encodeUtf8 <$> parseJSON v
+
+instance ToJSON SqlSource where
+  toJSON (SqlSource s)
+    = toJSON $ decodeLatin1 s
 
 
 data ClusterRun a

@@ -3,6 +3,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
+{-# OPTIONS_GHC -fno-warn-incomplete-patterns #-}
 
 module Main where
 
@@ -10,7 +11,7 @@ import           Control.Exception
 import           Control.Monad
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
-import           Control.Monad.Trans.Except.Extra (hoistEither)
+import           Control.Monad.Trans.Except.Extra (handleIOExceptT, hoistEither)
 import           Data.Bool (bool)
 import           Data.ByteString.Char8 as BS (ByteString, empty, pack, readFile)
 import           Data.ByteString.Lazy.Char8 as BSL (getContents, putStr)
@@ -34,6 +35,8 @@ import           Cardano.Benchmarking.Publish.Types
 import           Command
 import           JSONWrapper
 
+import           Paths_bench_data_publish
+
 
 main :: IO ()
 main
@@ -55,10 +58,10 @@ toJSONWrapper Config{..}
     CLIList ->
       wrap List ()
     CLIBootstrap tableSqlFile -> do
-      sql <- Prelude.readFile tableSqlFile
+      sql <- maybe (show <$> loadBuiltinSql "bench-data-tables.sql") Prelude.readFile tableSqlFile
       wrap Bootstrap (appForce, sql)
-    CLIUpdateViews viewsSqlFile anonRole -> do
-      sql <- Prelude.readFile viewsSqlFile
+    CLIUpdateViews anonRole viewsSqlFile -> do
+      sql <- maybe (show <$> loadBuiltinSql "bench-data-views.sql") Prelude.readFile viewsSqlFile
       wrap UpdateViews (anonRole, sql)
     CLIPublish publish target -> do
       eMeta :: Either String Aeson.Value <-
@@ -74,6 +77,8 @@ toJSONWrapper Config{..}
         Right run -> wrap Import run
     CLIImportAll targetDir ->
       wrap ImportAll targetDir
+    CLIGetBuiltin sqlName ->
+      wrap GetBuiltin sqlName
   where
     wrap :: ToJSON a => Command -> a -> IO JSONWrapper
     wrap cmd
@@ -90,8 +95,7 @@ evalCatching conf db
 
 eval :: DB.Settings -> JSONWrapper -> IO JSONResult
 eval dbSettings JSONWrapper{..}
-  = either errorResult id
-    <$> withDB dbSettings (runExceptT . go)
+  = either errorResult id <$> go
   where
     dbSchema        = DBSchema $ maybe "public" BS.pack schema
     errorResult msg = resultError $ "ERROR: (" ++ show command ++ ") -- " ++ msg
@@ -103,10 +107,21 @@ eval dbSettings JSONWrapper{..}
         Error e -> throwE e
         Success v -> pure v
 
-    go :: Connection -> ExceptT String IO JSONResult
-    go conn
+    go
       = case command of
+          GetBuiltin  -> runExceptT goNoDB
+          _           -> withDB dbSettings (runExceptT . goWithDB)
 
+    goNoDB :: ExceptT String IO JSONResult
+    goNoDB
+      = case command of
+          GetBuiltin -> do
+            sqlName <- liftUnwrapPayload payload
+            resultSuccess <$> getBuiltInSql sqlName
+
+    goWithDB :: Connection -> ExceptT String IO JSONResult
+    goWithDB conn
+      = case command of
         Bootstrap -> do
           (force, tableSql) <- liftUnwrapPayload payload
           if not force
@@ -228,3 +243,13 @@ getDBSettings DBCreds{..}
       (maybe envUser BS.pack dbUser)
       (maybe envPass BS.pack dbPass)
       (BS.pack dbName)
+
+getBuiltInSql :: FilePath -> ExceptT String IO SqlSource
+getBuiltInSql
+  = handleIOExceptT show . loadBuiltinSql
+
+loadBuiltinSql :: FilePath -> IO SqlSource
+loadBuiltinSql sqlName
+  = do
+    fn <- getDataFileName ("db" </> sqlName)
+    SqlSource <$> BS.readFile fn

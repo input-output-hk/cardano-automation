@@ -10,6 +10,7 @@ build-type:         Simple
 
 extra-doc-files:    Documentation.md
 
+data-files:         db/*.sql
 
 executable bench-data-publish
     main-is:            Main.hs
@@ -20,6 +21,8 @@ executable bench-data-publish
                         Cardano.Benchmarking.Publish.Types
                         Command
                         JSONWrapper
+
+                        Paths_bench_data_publish
 
     if os(windows)
       buildable: False

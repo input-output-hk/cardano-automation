@@ -8,8 +8,7 @@ module  Cardano.Benchmarking.Publish.DBSchema
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Except (ExceptT)
 import           Control.Monad.Trans.Except.Extra
-import           Data.Aeson
-import           Data.ByteString.Char8 as BS (ByteString, null, unpack)
+import           Data.ByteString.Char8 as BS (ByteString, null)
 import           Data.Functor.Contravariant as Contra ((>$<))
 import           Data.List (sort)
 import           Data.Text as T (Text, intercalate, snoc)
@@ -23,21 +22,6 @@ import           Hasql.Session as DB
 import           Hasql.Statement as DB (Statement (Statement))
 
 import           Cardano.Benchmarking.Publish.Types
-
-
-newtype DBSchema  = DBSchema BS.ByteString
-newtype SqlSource = SqlSource BS.ByteString
-
-instance Show DBSchema where
-  show (DBSchema s) = BS.unpack s
-
-instance FromJSON DBSchema where
-  parseJSON v
-    = DBSchema . encodeUtf8 <$> parseJSON v
-
-instance FromJSON SqlSource where
-  parseJSON v
-    = SqlSource . encodeUtf8 <$> parseJSON v
 
 
 liftDBRun :: MonadIO m => DB.Session a -> Connection -> ExceptT String m a

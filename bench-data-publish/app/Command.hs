@@ -24,6 +24,7 @@ data Command
   | UpdateViews
   | Import
   | ImportAll
+  | GetBuiltin
   deriving (Show, Generic)
 
 instance FromJSON Command where
@@ -34,8 +35,9 @@ data CLICommand
   | CLIImport FilePath
   | CLIImportAll FilePath
   | CLIList
-  | CLIBootstrap FilePath
-  | CLIUpdateViews FilePath String
+  | CLIBootstrap (Maybe FilePath)
+  | CLIUpdateViews String (Maybe FilePath)
+  | CLIGetBuiltin FilePath
   | CLIViaStdin
   deriving Show
 
@@ -64,6 +66,8 @@ envVarDBPass, envVarDBURI :: String
 envVarDBPass    = "BENCH_DATA_PASS"
 envVarDBURI     = "BENCH_DATA_PGURI"
 
+emptyConfig :: CLICommand -> Config
+emptyConfig cmd = Config cmd NoCreds Nothing False
 
 parseCommandLine :: IO Config
 parseCommandLine =
@@ -74,19 +78,25 @@ parseCommandLine =
 
 parseConfig :: Parser Config
 parseConfig
-  = parseViaStdin
-    <|>
-    ( Config
-    <$> parseCommand
-    <*> parseDBCredentials
-    <*> optional parseDBSchema
-    <*> parseForce
-    )
+  =     parseCommandWithoutCredentials
+    <|> ( Config
+        <$> parseCommand
+        <*> parseDBCredentials
+        <*> optional parseDBSchema
+        <*> parseForce
+        )
   where
-    parseViaStdin = subparser $
-        cmdParser "via-stdin"
-          (pure $ Config CLIViaStdin NoCreds Nothing False)
+    parseCommandWithoutCredentials = subparser $ mconcat
+       [ cmdParser "via-stdin"
+          (pure $ emptyConfig CLIViaStdin)
           "Expect command and payload as JSON via stdin"
+       , cmdParser "get-builtin"
+          (emptyConfig . CLIGetBuiltin <$> strArgument (metavar "NAME" <> help "The built-in .sql to get"))
+          "Output a built-in .sql query"
+       , commandGroup "CMD1 (without DB credentials):"
+       , metavar "CMD1"
+       ]
+
     parseCommand = subparser $ mconcat
       [ cmdParser "import"
           (CLIImport <$> parseRunDirArg)
@@ -104,14 +114,16 @@ parseConfig
           (CLIPublish False <$> parseRunDirArg)
           "Unpublish specified run from API"
       , cmdParser "bootstrap"
-          (CLIBootstrap <$> parseFileArg ".sql file containing table definitions")
+          (CLIBootstrap <$> optionalFileArg ".sql table definitions (overriding built-in!)")
           "Bootstrap schema onto DB, CLEARING PREVIOUS SCHEMA"
       , cmdParser "update-views"
           (CLIUpdateViews
-            <$> parseFileArg ".sql file containing view definitions"
-            <*> strArgument (metavar "ROLE" <> help "Anonymous/read-only role on the DB")
+            <$> strOption (short 'r' <> metavar "ROLE" <> help "Anonymous/read-only role on the DB")
+            <*> optionalFileArg ".sql view definitions (overriding built-in!)"
           )
           "Only update API facing views for role in the schema, not touching any tables or stored data"
+       , commandGroup "CMD2 (with DB credentials):"
+       , metavar "CMD2"
       ]
     cmdParser cmd parser description = command cmd $ info parser $ progDesc description
 
@@ -158,9 +170,9 @@ parseRunDirArg
     <> completer (bashCompleter "file")
     )
 
-parseFileArg :: String -> Parser FilePath
-parseFileArg helpText
-  = strArgument
+optionalFileArg :: String -> Parser (Maybe FilePath)
+optionalFileArg helpText
+  = optional $ strArgument
     ( metavar "FILE"
     <> help helpText
     <> completer (bashCompleter "file")
