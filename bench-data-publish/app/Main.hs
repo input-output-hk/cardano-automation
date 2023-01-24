@@ -22,7 +22,7 @@ import           System.Directory.Extra (listDirectories)
 import           System.Environment (lookupEnv)
 import           System.Exit
 import           System.FilePath
-import           System.Posix.User (getLoginName)
+import           System.Posix.User (getRealUserID, getUserEntryForID, userGecos)
 import           Text.Printf
 
 import           Data.Aeson as Aeson
@@ -243,6 +243,8 @@ getDBSettings DBCreds{..}
       (maybe envUser BS.pack dbUser)
       (maybe envPass BS.pack dbPass)
       (BS.pack dbName)
+  where
+    getLoginName = takeWhile (/= ',') . userGecos <$> (getUserEntryForID =<< getRealUserID)
 
 getBuiltInSql :: FilePath -> ExceptT String IO SqlSource
 getBuiltInSql
