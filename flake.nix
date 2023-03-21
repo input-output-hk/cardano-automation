@@ -23,7 +23,8 @@
             hixProject =
               final.haskell-nix.hix.project {
                 src = ./.;
-                evalSystem = "x86_64-linux";
+                # only needed for materialization for other systems
+                # evalSystem = "x86_64-linux";
               };
           })
         ];
