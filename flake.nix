@@ -23,13 +23,15 @@
             hixProject =
               final.haskell-nix.hix.project {
                 src = ./.;
-                evalSystem = system;
+                # set this to your current system for `nix flake show` to work:
+                #evalSystem = "x86_64-linux";
               };
           })
         ];
         pkgs = import nixpkgs { inherit system overlays; inherit (haskellNix) config; };
         flake = pkgs.hixProject.flake {};
-      in flake // {
+      in {
+        inherit (flake) apps checks ciJobs hydraJobs packages;
         legacyPackages = pkgs;
       } // tullia.fromSimple system (import nix/tullia.nix supportedSystems));
 
