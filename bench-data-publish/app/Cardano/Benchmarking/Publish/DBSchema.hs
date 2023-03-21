@@ -34,6 +34,17 @@ setSearchPath :: DBSchema -> ByteString
 setSearchPath (DBSchema schemaName)
   = "SET search_path TO " <> schemaName <> ";\n"
 
+{-
+TODO:
+- DO NOT assume privileges on schema
+
+- set path
+- query drop script for all objects with
+    select 'drop table "' || tablename || '" cascade;' from pg_tables where schemaname = 'schemaName';
+- unless empty, execute script
+- execute tableSql
+-}
+
 -- bootstraps schema with empty tables onto a DB
 -- is destructive: drops a possible pre-existing schema with all data
 bootstrap :: SqlSource -> DBSchema -> Connection -> ExceptT String IO ()
