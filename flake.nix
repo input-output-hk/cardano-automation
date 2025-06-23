@@ -1,9 +1,8 @@
 {
   # This is a template created by `hix init`
 
-  # This haskellNix pin matches cardano-node haskellNix pin as of node 10.2.1
   # pre-release and removes `std` and `tullia` nested flake input deps.
-  inputs.haskellNix.url = "github:input-output-hk/haskell.nix/cb139fa956158397aa398186bb32dd26f7318784";
+  inputs.haskellNix.url = "github:input-output-hk/haskell.nix";
 
   inputs.nixpkgs.follows = "haskellNix/nixpkgs-unstable";
   inputs.flake-utils.url = "github:numtide/flake-utils";
@@ -12,7 +11,7 @@
       supportedSystems = [
         "x86_64-linux"
         "x86_64-darwin"
-        "aarch64-linux"
+#        "aarch64-linux"
         "aarch64-darwin"
       ];
     in

@@ -34,7 +34,7 @@ executable bench-data-publish
                         , directory
                         , extra
                         , filepath
-                        , hasql >= 1.5
+                        , hasql >= 1.5 && < 1.9
                         , optparse-applicative
                         , text
                         , time
