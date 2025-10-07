@@ -1,12 +1,25 @@
 {
-  # This is a template created by `hix init`
 
-  # pre-release and removes `std` and `tullia` nested flake input deps.
-  inputs.haskellNix.url = "github:input-output-hk/haskell.nix";
+  inputs = {
 
-  inputs.nixpkgs.follows = "haskellNix/nixpkgs-unstable";
-  inputs.flake-utils.url = "github:numtide/flake-utils";
-  outputs = { self, nixpkgs, flake-utils, haskellNix }:
+    nixpkgs.follows = "haskellNix/nixpkgs-unstable";
+
+    flake-utils.url = "github:numtide/flake-utils";
+
+    hackageNix = {
+      url = "github:input-output-hk/hackage.nix";
+      flake = false;
+    };
+
+    haskellNix = {
+      url = "github:input-output-hk/haskell.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.hackage.follows = "hackageNix";
+    };
+
+  };
+
+  outputs = { self, nixpkgs, flake-utils, haskellNix, ... }:
     let
       supportedSystems = [
         "x86_64-linux"

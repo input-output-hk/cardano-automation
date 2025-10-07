@@ -132,22 +132,6 @@
         "type": "github"
       }
     },
-    "hackage": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1750552833,
-        "narHash": "sha256-a2IPK63DfQsxuHY+lOLXy3Mnz2x4GUx72muULt3O/Zo=",
-        "owner": "input-output-hk",
-        "repo": "hackage.nix",
-        "rev": "c4a5e33bcb9a1a605d4fb2a2f55ba85dd0965afc",
-        "type": "github"
-      },
-      "original": {
-        "owner": "input-output-hk",
-        "repo": "hackage.nix",
-        "type": "github"
-      }
-    },
     "hackage-for-stackage": {
       "flake": false,
       "locked": {
@@ -181,6 +165,22 @@
         "type": "github"
       }
     },
+    "hackageNix": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1759154585,
+        "narHash": "sha256-OC5Y3E20bwkfMVlB2uhf7eF/FcuC1JD/BXkxR8rMjR4=",
+        "owner": "input-output-hk",
+        "repo": "hackage.nix",
+        "rev": "7e61ac3eb4cc042b37c6511b65984f59fe6d40de",
+        "type": "github"
+      },
+      "original": {
+        "owner": "input-output-hk",
+        "repo": "hackage.nix",
+        "type": "github"
+      }
+    },
     "haskellNix": {
       "inputs": {
         "HTTP": "HTTP",
@@ -190,7 +190,9 @@
         "cardano-shell": "cardano-shell",
         "flake-compat": "flake-compat",
         "ghc-8.6.5-iohk": "ghc-8.6.5-iohk",
-        "hackage": "hackage",
+        "hackage": [
+          "hackageNix"
+        ],
         "hackage-for-stackage": "hackage-for-stackage",
         "hackage-internal": "hackage-internal",
         "hls": "hls",
@@ -209,8 +211,7 @@
         "hpc-coveralls": "hpc-coveralls",
         "iserv-proxy": "iserv-proxy",
         "nixpkgs": [
-          "haskellNix",
-          "nixpkgs-unstable"
+          "nixpkgs"
         ],
         "nixpkgs-2305": "nixpkgs-2305",
         "nixpkgs-2311": "nixpkgs-2311",
@@ -604,6 +605,7 @@
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
+        "hackageNix": "hackageNix",
         "haskellNix": "haskellNix",
         "nixpkgs": [
           "haskellNix",
