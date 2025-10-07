@@ -1,13 +1,14 @@
 
 module Network.HTTP.PrometheusTracker.Utils where
 
-import           Data.Aeson               (ToJSON)
-import           Data.Aeson.Encode.Pretty
-import           Data.ByteString.Lazy     as BL (writeFile)
+import           Data.Aeson                 (ToJSON)
+import           Data.Aeson.Encode.Pretty   hiding (encodePretty)
+import           Data.ByteString.Lazy.Char8 as BL (ByteString, writeFile, putStr)
 import           Data.Maybe
 import           System.Directory
 import           System.FilePath
 import           Text.Read
+
 
 listScrapeFiles :: IO [FilePath]
 listScrapeFiles =
@@ -26,7 +27,14 @@ timestampOfScrape fn
 
 writeFilePretty :: ToJSON a => FilePath -> a -> IO ()
 writeFilePretty fn =
-  BL.writeFile fn . encodePretty' prettyConfig
+  BL.writeFile fn . encodePretty
+
+writeStdoutPretty :: ToJSON a => a -> IO ()
+writeStdoutPretty =
+  BL.putStr . encodePretty
+
+encodePretty :: ToJSON a => a -> BL.ByteString
+encodePretty = encodePretty' prettyConfig
   where
     prettyConfig :: Config
     prettyConfig = defConfig { confCompare = compare, confTrailingNewline = True }

@@ -3,6 +3,7 @@ module CLI (
   , getOpts
   ) where
 
+import           Data.List.NonEmpty                (NonEmpty)
 import           Options.Applicative
 
 import           Network.HTTP.PrometheusTracker.Types
@@ -12,15 +13,10 @@ data Command =
       CScrape           !ScrapeConfig
     | CSample           !String
     | CSummary          !FilePath
-    | CCompare          !FilePath        !FilePath
-    | CPlot             !MetricInSummary !MetricInSummary
+    | CCompare          !FilePath   !FilePath
     | CNames            !FilePath
+    | CPlot             !(NonEmpty String)        -- not implemented: create a plot for specified metrics
     deriving Show
-
-data MetricInSummary = MetricInSummary {_misFile :: !FilePath, _misName :: !String}
-
-instance Show MetricInSummary where
-  show (MetricInSummary f n) = f ++ ":" ++ n
 
 
 getOpts :: IO Command

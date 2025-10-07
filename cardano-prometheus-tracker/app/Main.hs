@@ -11,7 +11,7 @@ import           CLI
 
 -- Examples for commonly configured Prometheus URLs in workbench:
 -- * old system, node-0: http://localhost:12798/metrics
--- * new system, node-0: http://localhost:3200/tracersocket0 or http://localhost:3200/12700130000
+-- * new system, node-0: http://localhost:3200/node-0 (via cardano-tracer)
 
 main :: IO ()
 main = getOpts >>= \case
@@ -35,6 +35,6 @@ main = getOpts >>= \case
   CSample url -> do
     manager <- newManager defaultManagerSettings
     metrics <- scrapeOnce manager url
-    writeFilePretty "/dev/stdout" metrics
+    writeStdoutPretty metrics
 
   cmd -> putStrLn $ "not implemented: " ++ show cmd

@@ -44,8 +44,8 @@ Enable metrics in your node’s `config.json`:
 
 ```bash
 git clone https://github.com/input-output-hk/cardano-automation.git
-cd cardano-prometheus-tracker
-cabal build all
+cd cardano-automation
+cabal build cardano-prometheus-tracker
 ```
 
 ### Run
@@ -58,16 +58,6 @@ cabal run cardano-prometheus-tracker -- \
 ```
 
 ---
-
-## ⚙️ Command-line Options (planned)
-
-| Flag           | Description                                                             |
-| -------------- | ----------------------------------------------------------------------- |
-| `--target-url` | Prometheus metrics endpoint (default: `http://127.0.0.1:12798/metrics`) |
-| `--interval`   | Scrape interval, e.g. `5s`, `1m`                                        |
-| `--timeout`    | Request timeout                                                         |
-| `--store`      | Storage backend: `csv`, `sqlite`, or `stdout`                           |
-| `--filter`     | Regex to include/exclude metric names                                   |
 
 
 ## 📊 Example
@@ -91,7 +81,9 @@ timestamp,metric,value,labels
 
 ## 🔮 Roadmap
 
+* [ ] Improved functionality and config, e.g. regex match metric names, set timeouts
 * [ ] SQLite backend for persistent time-series
+* [ ] Plotting capabilities
 
 ---
 
