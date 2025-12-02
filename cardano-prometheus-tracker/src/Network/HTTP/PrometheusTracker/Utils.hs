@@ -1,18 +1,23 @@
 
 module Network.HTTP.PrometheusTracker.Utils where
 
-import           Data.Aeson                 (ToJSON)
-import           Data.Aeson.Encode.Pretty   hiding (encodePretty)
-import           Data.ByteString.Lazy.Char8 as BL (ByteString, writeFile, putStr)
+import           Data.Aeson (ToJSON)
+import           Data.Aeson.Encode.Pretty hiding (encodePretty)
+import           Data.ByteString.Lazy.Char8 as BL (ByteString, putStr, writeFile)
+import           Data.Char (isDigit)
 import           Data.Maybe
 import           System.Directory
 import           System.FilePath
 import           Text.Read
 
 
-listScrapeFiles :: IO [FilePath]
-listScrapeFiles =
-  filter (isJust . timestampOfScrape) <$> listDirectory "."
+listScrapeFiles, listScrapeTxts :: FilePath -> IO [FilePath]
+listScrapeFiles = listScrapesInternal timestampOfScrape
+listScrapeTxts  = listScrapesInternal timestampOfTxt
+
+listScrapesInternal :: (FilePath -> Maybe Int) -> FilePath -> IO [FilePath]
+listScrapesInternal matchTimestamp path =
+  filter (isJust . matchTimestamp) <$> listDirectory path
 
 -- matches scrape JSON files
 timestampOfScrape :: FilePath -> Maybe Int
@@ -23,7 +28,17 @@ timestampOfScrape fn
     _                                  -> Nothing
   where
     ext     = takeExtension fn
-    name    = dropExtension fn
+    name    = (dropExtension . takeFileName) fn
+
+-- matches scrape TXT files
+timestampOfTxt :: FilePath -> Maybe Int
+timestampOfTxt fn
+  | ext /= ".txt" = Nothing
+  | otherwise = readMaybe $ takeWhileEnd isDigit name
+  where
+    takeWhileEnd f = reverse . takeWhile f . reverse
+    ext            = takeExtension fn
+    name           = (dropExtension . takeFileName) fn
 
 writeFilePretty :: ToJSON a => FilePath -> a -> IO ()
 writeFilePretty fn =

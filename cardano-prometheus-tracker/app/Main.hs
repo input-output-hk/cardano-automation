@@ -17,7 +17,7 @@ main :: IO ()
 main = getOpts >>= \case
 
   CSummary outfile -> do
-    scrapes <- listScrapeFiles
+    scrapes <- listScrapeFiles "."
     if null scrapes
       then putStrLn "--> no scrape JSON files found"
       else createSummaryFromScrapes outfile
@@ -37,4 +37,8 @@ main = getOpts >>= \case
     metrics <- scrapeOnce manager url
     writeStdoutPretty metrics
 
-  cmd -> putStrLn $ "not implemented: " ++ show cmd
+  CPackage outFile -> packageToCBOR outFile
+
+  CParse -> parseScrapeTxtFiles
+
+  CPlot{} -> putStrLn "not implemented: command 'plot'"

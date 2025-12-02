@@ -29,6 +29,7 @@ common project-config
 library
   import:               project-config
   exposed-modules:      Network.HTTP.PrometheusTracker
+                        Network.HTTP.PrometheusTracker.CBOR
                         Network.HTTP.PrometheusTracker.Summary
                         Network.HTTP.PrometheusTracker.Types
                         Network.HTTP.PrometheusTracker.Utils
@@ -43,6 +44,7 @@ library
                       , directory
                       , filepath
                       , http-client
+                      , serialise
                       , text
                       , text-metrics
                       , time

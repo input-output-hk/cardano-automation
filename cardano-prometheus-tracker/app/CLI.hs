@@ -11,10 +11,12 @@ import           Network.HTTP.PrometheusTracker.Types
 
 data Command =
       CScrape           !ScrapeConfig
+    | CParse
     | CSample           !String
     | CSummary          !FilePath
     | CCompare          !FilePath   !FilePath
     | CNames            !FilePath
+    | CPackage          !FilePath
     | CPlot             !(NonEmpty String)        -- not implemented: create a plot for specified metrics
     deriving Show
 
@@ -26,12 +28,16 @@ parseCLI :: Parser Command
 parseCLI = subparser $ mconcat
   [ op "scrape" "Scrape a Prometheus URL"
       (CScrape <$> parseScrapeConfig)
+  , op "parse" "Parse all TXTs in $PWD into scrape JSONs; filename must contain timestamp"
+      (pure CParse)
   , op "summarize" "Join all scraped JSONs in $PWD into a summary"
       (CSummary <$> parseOutFileName "output JSON file")
   , op "compare" "Print comparison between two summaries to stdout"
       (CCompare <$> parseSummaryFileName "FILE1" <*> parseSummaryFileName "FILE2")
   , op "names" "List all metrics names observed in summary to stdout"
       (CNames <$> parseSummaryFileName "FILE")
+  , op "package" "Package scraped JSONs in all immediate subdirs of $PWD into a CBOR blob"
+      (CPackage <$> parseOutFileName "output CBOR file")      
   , op "sample" "Scrape once and dump the result to stdout"
       (CSample <$> parseURL)
   ]

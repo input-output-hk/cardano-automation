@@ -28,7 +28,7 @@ import           Network.HTTP.PrometheusTracker.Utils
 
 createSummaryFromScrapes :: FilePath -> IO ()
 createSummaryFromScrapes outfile = do
-  scrapes <- sort . catMaybes <$> (mapM loadScrape =<< listScrapeFiles)
+  scrapes <- sort . catMaybes <$> (mapM loadScrape =<< listScrapeFiles ".")
   if null scrapes
     then putStrLn "--> no scrape JSON files found, exiting"
     else do
